@@ -1,5 +1,5 @@
- import { Scene } from 'phaser';
-import { io } from 'socket.io-client';
+import { Scene } from 'phaser';
+import { io, Socket } from 'socket.io-client';
 import DynamicImage from '../objects/dynamic-Image';
 import AnimatedText from '../objects/animated-text';
 import { fakeSocket } from '../FakeSocket';
@@ -237,7 +237,7 @@ class CountdownScene extends Scene {
     timerText: Phaser.GameObjects.Text;
     timeLeft: any;
     timerEvent: Phaser.Time.TimerEvent;
-    constructor(config:any) {
+    constructor(config: any) {
         super({ key: config.key });
         this.config = config;
     }
@@ -266,18 +266,20 @@ class CountdownScene extends Scene {
         }
     }
 
-    update(){
+    update() {
 
     }
 }
 
 export class PreparationScene extends CountdownScene {
     constructor(nextScene: any, title: any) {
-        super({ key: `Preparation_${nextScene}`, 
-            title, 
-            subtitle: 'Get ready...', 
-            duration: 5, 
-            nextScene });
+        super({
+            key: `Preparation_${nextScene}`,
+            title,
+            subtitle: 'Get ready...',
+            duration: 5,
+            nextScene
+        });
     }
 }
 
@@ -287,31 +289,22 @@ export class MessageVotingScene extends CountdownScene {
     messages: Phaser.GameObjects.Text;
     socket: any;
     constructor() {
-        super({ key: 'MessageVotingScene', 
-            title: 'Message Voting', 
-            subtitle: 'Send a message to vote!', 
-            duration: 10, 
-            nextScene: 'Preparation_LikeVotingScene' });
+        super({
+            key: 'MessageVotingScene',
+            title: 'Message Voting',
+            subtitle: 'Send a message to vote!',
+            duration: 10,
+            nextScene: 'Preparation_LikeVotingScene'
+        });
     }
 
     create() {
         super.create();
         this.votes = {}; // Store votes
         this.messages = this.add.text(400, 400, '', { fontSize: '20px', color: '#ffffff' }).setOrigin(0.5);
+        this.registry.set('gameState', 'messageVoting'); // ✅ Set game state
+        this.registry.set('messageVotes', {}); // Reset votes
 
-        this.socket = this.registry.get('socket');
-
-        fakeSocket.off('message'); // Prevent duplicate listeners
-        fakeSocket.on('message', (data:any) => {
-            const votes = this.registry.get('messageVotes');
-            votes[data.userId] = data.message;
-            this.registry.set('messageVotes', votes);
-        });
-        this.socket.on('message', (data:any) => {
-            // this.votes[data.userId] = data.message; // Store last vote from each user
-            // this.updateMessages();
-            console.log('message',data.nickname,data.message);
-        });
     }
 
     updateMessages() {
@@ -325,40 +318,25 @@ export class LikeVotingScene extends CountdownScene {
     voteDisplay: Phaser.GameObjects.Text;
     socket: any;
     constructor() {
-        super({ key: 'LikeVotingScene', 
-            title: 'Like Voting', 
-            subtitle: 'Tap like to vote!', 
-            duration: 10, 
-            nextScene: 'ResultsScene' });
+        super({
+            key: 'LikeVotingScene',
+            title: 'Like Voting',
+            subtitle: 'Tap like to vote!',
+            duration: 10,
+            nextScene: 'ResultsScene'
+        });
     }
 
     create() {
         super.create();
+        this.registry.set('gameState', 'likeVoting'); // ✅ Set game state
+        this.registry.set('likeVotes', {}); // Reset votes
         this.votes = {}; // Track votes
-        this.voteDisplay = this.add.text(400, 400, '', { fontSize: '20px', color: '#ffffff' }).setOrigin(0.5);
+        this.voteDisplay = this.add.text(400, 400, '',
+            { fontSize: '20px', color: '#ffffff' })
+            .setOrigin(0.5);
 
-        fakeSocket.off('like'); // Prevent duplicate listeners
-        fakeSocket.on('like', (data:any) => {
-            const votes = this.registry.get('likeVotes');
 
-            if (!votes[data.userId]) {
-                votes[data.userId] = 0;
-            }
-
-            votes[data.userId] += data.likeCount;
-            this.registry.set('likeVotes', votes);
-        });
-
-        this.socket = this.registry.get('socket');
-        this.socket.on('like', (data:any) => {
-            console.log('like',data.userId);
-            console.log('message',data.uniqueId,data.likeCount);
-            // if (!this.votes[data.userId]) {
-            //     this.votes[data.userId] = 0;
-            // }
-            // this.votes[data.userId] += data.likeCount;
-            // this.updateVotes();
-        });
     }
 
     updateVotes() {
@@ -368,29 +346,35 @@ export class LikeVotingScene extends CountdownScene {
 
 export class ResultsScene extends CountdownScene {
     constructor() {
-        super({ key: 'ResultsScene', 
-            title: 'Results', 
-            subtitle: 'Final votes are in!', 
-            duration: 10, 
-            nextScene: 'Game' });
+        super({
+            key: 'ResultsScene',
+            title: 'Results',
+            subtitle: 'Final votes are in!',
+            duration: 10,
+            nextScene: 'Game'
+        });
     }
 
     create() {
         super.create();
-
-        // Get the stored votes from the registry
+        
         const messageVotes = this.registry.get('messageVotes') || {};
         const likeVotes = this.registry.get('likeVotes') || {};
 
-        // Display votes
         let resultsText = 'Final Results:\n\n';
         Object.keys(messageVotes).forEach(userId => {
             const messageVote = messageVotes[userId] || 'No vote';
-            const likeVote = likeVotes[userId] || 0;
-            resultsText += `User: ${userId}\nMessage Vote: ${messageVote}\nLikes: ${likeVote} likes\n\n`;
+            const likeCount = likeVotes[userId] || 0; // ✅ Show correct like count
+
+            resultsText += `👤 User: ${userId}\n📩 Message Vote: ${messageVote}\n❤️ Likes: ${likeCount} likes\n\n`;
         });
 
         this.add.text(400, 250, resultsText, { fontSize: '18px', color: '#ffffff' }).setOrigin(0.5);
+
+        // ✅ Reset votes for the next round
+        this.registry.set('messageVotes', {});
+        this.registry.set('likeVotes', {});
+        this.registry.set('gameState', 'idle');
     }
 }
 
@@ -398,35 +382,76 @@ export class ResultsScene extends CountdownScene {
 
 
 export class Game extends Scene {
+    socket: Socket;
     constructor() {
         super('Game');
     }
 
     create() {
-        // console.log('Game Scene Loaded');
-        // this.registry.set('socket', io('ws://localhost:3000'));
-        // this.scene.start('PreparationScene');
 
-                // 🔹 Text (OUTSIDE the container)
-          this.add.text(300, 300 , "text", {
-                    fontFamily: "Arial Black",
-                    fontSize: "24px",
-                    color: "#ffffff",
-                    stroke: "#000000",
-                    strokeThickness: 8,
-                    align: "center",
-                    maxLines: 1,
-                    wordWrap: { width: 100, useAdvancedWrap: true },
-                })
-                    .setOrigin(0.5)
+        console.log('Game Scene Created');
 
-        console.log('Game Scene Loaded');
-        this.registry.set('socket', io('ws://localhost:3000'));
+        this.socket = io('ws://localhost:3000');
+        this.registry.set('socket', this.socket); // Store socket globally
+        this.registry.set('gameState', 'idle'); // Default game state
 
-        // Reset votes when returning to Game Scene
-        this.registry.set('messageVotes', {});
+        this.registry.set('messageVotes', {}); // Store votes globally
         this.registry.set('likeVotes', {});
+
+        this.socket.on('chat', (data: any) => {
+            this.handleMessageVote(data);
+        });
+
+        this.socket.on('like', (data: any) => {
+            this.handleLikeVote(data);
+        });
 
         this.scene.start('Preparation_MessageVotingScene');
     }
+
+    handleMessageVote(data: any) {
+        const gameState = this.registry.get('gameState');
+
+        if (gameState === 'messageVoting') { // ✅ Only process during message voting
+
+
+            const vote = data.comment.trim();
+
+        // ✅ Check if the message is a number (0-9)
+        if (!/^[0-9]$/.test(vote)) {
+            console.log('❌ Invalid vote (not a number):', vote);
+            return;
+        }
+
+
+            const votes = this.registry.get('messageVotes');
+            votes[data.uniqueId] = data.comment;
+            this.registry.set('messageVotes', votes);
+            // console.log('🟢 Message Vote:', data);
+            console.log('messageVotes: ', data.nickname, data.comment);
+        }
+    }
+
+    handleLikeVote(data: any) {
+        const gameState = this.registry.get('gameState');
+    
+        if (gameState === 'likeVoting') { // ✅ Only process during like voting
+            const messageVotes = this.registry.get('messageVotes'); // Get previous message votes
+            const likeVotes = this.registry.get('likeVotes');
+    
+            if (messageVotes[data.uniqueId]) { // ✅ Check if the user voted in message voting
+                if (!likeVotes[data.uniqueId]) {
+                    likeVotes[data.uniqueId] = 0;
+                }
+    
+                likeVotes[data.uniqueId] += data.likeCount; // ✅ Count likes for message vote
+                this.registry.set('likeVotes', likeVotes);
+    
+                console.log('❤️ Like Vote:', data.uniqueId, `+${data.likeCount} (Total: ${likeVotes[data.uniqueId]})`);
+            } else {
+                console.log('⚠️ Ignored like, user did not vote in message voting:', data.uniqueId);
+            }
+        }
+    }
+
 }
